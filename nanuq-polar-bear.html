@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nanuq — An Interactive Polar Bear</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#071120;
+    --ink-glass:rgba(7,17,32,.58);
+    --frost:#eaf4ff;
+    --drift:#9fc6e8;
+    --aurora:#5ef0c8;
+    --dusk:#8f7bff;
+    --line:rgba(159,198,232,.22);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    overflow:hidden;
+    background:#0a1128;
+    color:var(--frost);
+    font-family:"Space Grotesk",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  #stage{position:fixed;inset:0}
+  #stage canvas{display:block;touch-action:none}
+
+  /* ---------- HUD shell ---------- */
+  .hud{position:fixed;z-index:10}
+  .glass{
+    background:var(--ink-glass);
+    border:1px solid var(--line);
+    border-radius:18px;
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    box-shadow:0 10px 40px rgba(2,8,20,.35);
+  }
+
+  /* ---------- Title plate ---------- */
+  #plate{top:20px;left:20px;pointer-events:none;max-width:min(420px,calc(100vw - 40px))}
+  #plate .eyebrow{
+    font-size:10px;font-weight:700;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--drift);margin-bottom:8px;
+  }
+  #plate h1{
+    font-family:"Fraunces",serif;font-weight:900;
+    font-size:clamp(34px,6vw,58px);line-height:.95;letter-spacing:-.01em;
+    background:linear-gradient(180deg,#ffffff 20%,#a8dcff 90%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 40px rgba(94,240,200,.15);
+  }
+  #plate .sub{margin-top:10px;font-size:13px;color:var(--drift);line-height:1.5;max-width:34ch}
+
+  /* ---------- Field notes ---------- */
+  #notes{top:20px;right:20px;width:min(312px,calc(100vw - 40px));overflow:hidden}
+  #notes header{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:14px 16px;cursor:pointer;user-select:none;
+  }
+  #notes header:focus-visible{outline:2px solid var(--aurora);outline-offset:-2px;border-radius:18px}
+  #notes .nt{font-size:11px;font-weight:700;letter-spacing:.26em;text-transform:uppercase;color:var(--frost)}
+  #notes .count{
+    font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink);
+    background:var(--aurora);border-radius:999px;padding:3px 9px;
+    transition:transform .25s ease;
+  }
+  #notes .count.pulse{transform:scale(1.18)}
+  #notes .caret{color:var(--drift);font-size:11px;transition:transform .3s ease}
+  #notes.open .caret{transform:rotate(180deg)}
+  #notesBody{max-height:0;transition:max-height .35s ease;overflow:hidden}
+  #notes.open #notesBody{max-height:420px}
+  #chips{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:2px 16px 12px}
+  .chip{
+    display:flex;align-items:center;gap:8px;
+    font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--drift);border:1px dashed var(--line);border-radius:10px;
+    padding:8px 10px;transition:all .3s ease;
+  }
+  .chip .dot{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--drift);flex:none;transition:all .3s ease}
+  .chip.found{color:var(--frost);border:1px solid rgba(94,240,200,.45);background:rgba(94,240,200,.08)}
+  .chip.found .dot{background:var(--aurora);border-color:var(--aurora);box-shadow:0 0 10px rgba(94,240,200,.7)}
+  #note{
+    margin:0 16px 12px;padding:12px 14px;border-radius:12px;
+    background:rgba(159,198,232,.07);border:1px solid var(--line);
+    font-size:13px;line-height:1.55;color:var(--frost);min-height:64px;
+  }
+  #note b{color:var(--aurora);font-weight:700;letter-spacing:.06em}
+  #stats{
+    padding:10px 16px 14px;font-size:10.5px;letter-spacing:.06em;color:var(--drift);
+    border-top:1px solid var(--line);line-height:1.7;
+  }
+
+  /* ---------- Dock ---------- */
+  #dock{
+    bottom:22px;left:50%;transform:translateX(-50%);
+    display:flex;gap:8px;padding:8px;border-radius:999px;
+  }
+  .btn{
+    appearance:none;border:1px solid transparent;cursor:pointer;
+    font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--drift);background:transparent;border-radius:999px;
+    padding:10px 18px;display:flex;align-items:center;gap:8px;
+    transition:all .25s ease;white-space:nowrap;
+  }
+  .btn:hover{color:var(--frost);border-color:var(--line)}
+  .btn:focus-visible{outline:2px solid var(--aurora);outline-offset:2px}
+  .btn[aria-pressed="true"]{
+    color:var(--ink);background:var(--aurora);
+    box-shadow:0 0 24px rgba(94,240,200,.45);
+  }
+  .btn .ic{font-size:14px;line-height:1}
+
+  /* ---------- Hint & toast ---------- */
+  #hint{
+    bottom:26px;left:22px;font-size:11px;letter-spacing:.1em;color:var(--drift);
+    pointer-events:none;text-transform:uppercase;line-height:1.9;
+  }
+  #hint b{color:var(--frost);font-weight:700}
+  .hint-touch{display:none}
+  @media (hover:none){ .hint-mouse{display:none} .hint-touch{display:block} }
+
+  #toast{
+    left:50%;bottom:86px;transform:translateX(-50%) translateY(12px);
+    padding:10px 18px;border-radius:999px;font-size:12px;font-weight:500;
+    letter-spacing:.08em;color:var(--frost);opacity:0;pointer-events:none;
+    transition:all .35s ease;max-width:calc(100vw - 40px);text-align:center;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast b{color:var(--aurora)}
+
+  #fallback{
+    position:fixed;inset:0;display:none;place-items:center;text-align:center;
+    padding:24px;font-size:14px;color:var(--drift);line-height:1.7;
+  }
+
+  @media (max-width:640px){
+    #plate{top:14px;left:14px}
+    #plate .sub{display:none}
+    #notes{top:14px;right:14px;width:min(280px,calc(100vw - 28px))}
+    #hint{display:none}
+    #dock{bottom:16px}
+    .btn{padding:9px 14px;font-size:11px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<header id="plate" class="hud">
+  <div class="eyebrow">Ursus maritimus · Interactive field study</div>
+  <h1>Nanuq</h1>
+  <p class="sub">The ice bear, up close. Orbit around it, set it walking, and click its body to fill your field notes.</p>
+</header>
+
+<aside id="notes" class="hud glass open">
+  <header id="notesHead" tabindex="0" role="button" aria-expanded="true" aria-controls="notesBody">
+    <span class="nt">Field notes</span>
+    <span style="display:flex;align-items:center;gap:10px">
+      <span class="count" id="count">0 / 6</span>
+      <span class="caret">▾</span>
+    </span>
+  </header>
+  <div id="notesBody">
+    <div id="chips"></div>
+    <div id="note">Click a part of the bear — nose, ears, head, fur, paws or tail — to log a field note.</div>
+    <div id="stats">350–700 kg &nbsp;·&nbsp; sprints 40 km/h &nbsp;·&nbsp; swims 100 km+ &nbsp;·&nbsp; ~26,000 left in the wild</div>
+  </div>
+</aside>
+
+<nav id="dock" class="hud glass" aria-label="Scene controls">
+  <button class="btn" id="btnWalk" aria-pressed="false"><span class="ic">🐾</span>Walk</button>
+  <button class="btn" id="btnNight" aria-pressed="false"><span class="ic">🌌</span>Aurora</button>
+  <button class="btn" id="btnSnow" aria-pressed="true"><span class="ic">❄</span>Snow</button>
+</nav>
+
+<div id="hint" class="hud">
+  <span class="hint-mouse"><b>Drag</b> orbit &nbsp;·&nbsp; <b>Scroll</b> zoom &nbsp;·&nbsp; <b>Click bear</b> field note</span>
+  <span class="hint-touch"><b>Drag</b> orbit &nbsp;·&nbsp; <b>Pinch</b> zoom &nbsp;·&nbsp; <b>Tap bear</b> field note</span>
+</div>
+
+<div id="toast" class="hud glass"></div>
+
+<div id="fallback" class="hud">
+  <p>This exhibit needs WebGL to render its 3D polar bear.<br/>Try a recent version of Chrome, Edge, Firefox or Safari.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   0. Setup & helpers
+============================================================ */
+var RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+var stage = document.getElementById("stage");
+var renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+} catch(e){
+  document.getElementById("fallback").style.display = "grid";
+  return;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+stage.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 300);
+
+function damp(cur, target, k, dt){ return cur + (target - cur) * (1 - Math.exp(-k * dt)); }
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+/* ============================================================
+   1. Sky, fog & lights (day <-> aurora night blend)
+============================================================ */
+var DAY_BG = new THREE.Color(0xcfe6fa), NIGHT_BG = new THREE.Color(0x0a1128);
+var DAY_GROUND = new THREE.Color(0xf3f8fd), NIGHT_GROUND = new THREE.Color(0x9db1d9);
+var DAY_SUN = new THREE.Color(0xfff2dd), NIGHT_SUN = new THREE.Color(0x9db8ff);
+
+scene.background = DAY_BG.clone();
+scene.fog = new THREE.Fog(scene.background.getHex(), 34, 95);
+
+var hemi = new THREE.HemisphereLight(0xbfe0ff, 0xe8f1fa, 0.75);
+scene.add(hemi);
+
+var sun = new THREE.DirectionalLight(DAY_SUN.getHex(), 1.15);
+sun.position.set(14, 18, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -11; sun.shadow.camera.right = 11;
+sun.shadow.camera.top = 11;   sun.shadow.camera.bottom = -11;
+sun.shadow.camera.near = 2;   sun.shadow.camera.far = 50;
+sun.shadow.bias = -0.0004;
+scene.add(sun);
+
+var fill = new THREE.DirectionalLight(0x9db8ff, 0.3);
+fill.position.set(-10, 6, -8);
+scene.add(fill);
+
+/* ============================================================
+   2. Terrain — snowfield, frozen pond, ice mounds
+============================================================ */
+var groundMat = new THREE.MeshStandardMaterial({ color:DAY_GROUND.clone(), roughness:0.95, metalness:0 });
+var ground = new THREE.Mesh(new THREE.CircleGeometry(80, 64), groundMat);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+var pond = new THREE.Mesh(
+  new THREE.CircleGeometry(4.6, 40),
+  new THREE.MeshStandardMaterial({ color:0x9cc8ea, roughness:0.15, metalness:0.1 })
+);
+pond.rotation.x = -Math.PI/2;
+pond.position.set(-9, 0.02, -6);
+pond.receiveShadow = true;
+scene.add(pond);
+
+var iceMat = new THREE.MeshStandardMaterial({ color:0xe9f2fb, roughness:0.6, metalness:0, flatShading:true });
+
+// [angle, distance, scale, yScale] — kept clear of the walk circle (r = 3)
+var MOUNDS = [
+  [0.4, 9, 1.2, .55],[1.5, 13, 1.8, .6],[2.4, 8, 0.9, .5],[3.1, 16, 2.2, .65],
+  [3.9, 10, 1.1, .5],[4.7, 14, 1.6, .55],[5.5, 9, 0.8, .45],[6.0, 18, 2.6, .6],
+  // far silhouette ridge
+  [0.9, 34, 6.5, .7],[2.0, 40, 8.0, .8],[3.5, 36, 7.0, .75],[4.6, 42, 9.0, .8],[5.8, 38, 6.0, .7]
+];
+MOUNDS.forEach(function(m){
+  var mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(m[2], 0), iceMat);
+  mesh.position.set(Math.sin(m[0])*m[1], m[2]*m[3]*0.35, Math.cos(m[0])*m[1]);
+  mesh.scale.y = m[3];
+  mesh.rotation.y = m[0]*2.3;
+  mesh.castShadow = mesh.receiveShadow = true;
+  scene.add(mesh);
+});
+// small floes on the pond
+[[-10.5,-5.2,.8],[-8,-7.4,.6],[-9.6,-4.6,.5]].forEach(function(f){
+  var floe = new THREE.Mesh(new THREE.CylinderGeometry(f[2], f[2]*1.1, 0.12, 7), iceMat);
+  floe.position.set(f[0], 0.08, f[1]);
+  floe.castShadow = true;
+  scene.add(floe);
+});
+
+/* ============================================================
+   3. The bear
+============================================================ */
+var fur  = new THREE.MeshStandardMaterial({ color:0xf3efe4, roughness:0.85, metalness:0 });
+var dark = new THREE.MeshStandardMaterial({ color:0x141416, roughness:0.4,  metalness:0 });
+
+var bear = new THREE.Group();
+scene.add(bear);
+
+var partMeshes = [];
+function part(mesh, name){
+  mesh.castShadow = true;
+  mesh.userData.part = name;
+  partMeshes.push(mesh);
+  return mesh;
+}
+
+// -- torso ---------------------------------------------------
+var body = part(new THREE.Mesh(new THREE.SphereGeometry(1, 36, 26), fur), "fur");
+body.scale.set(1.55, 1.06, 1.08);
+body.position.set(-0.1, 1.38, 0);
+bear.add(body);
+
+var rump = part(new THREE.Mesh(new THREE.SphereGeometry(0.88, 28, 20), fur), "fur");
+rump.scale.set(1.05, 1, 1.02);
+rump.position.set(-1.05, 1.5, 0);
+bear.add(rump);
+
+var chest = part(new THREE.Mesh(new THREE.SphereGeometry(0.78, 28, 20), fur), "fur");
+chest.scale.set(1, 0.95, 0.96);
+chest.position.set(0.78, 1.42, 0);
+bear.add(chest);
+
+// -- neck (aligned from chest to head) ------------------------
+var neckA = new THREE.Vector3(1.02, 1.72, 0);
+var neckB = new THREE.Vector3(1.85, 2.08, 0);
+var neckDir = new THREE.Vector3().subVectors(neckB, neckA);
+var neckLen = neckDir.length();
+var neck = part(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.44, neckLen, 20), fur), "fur");
+neck.position.copy(neckA).add(neckB).multiplyScalar(0.5);
+neck.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), neckDir.clone().normalize());
+bear.add(neck);
+
+// -- head group ----------------------------------------------
+var headGroup = new THREE.Group();
+headGroup.position.set(1.85, 2.08, 0);
+bear.add(headGroup);
+
+var head = part(new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 24), fur), "head");
+head.scale.set(1.12, 1.02, 0.96);
+headGroup.add(head);
+
+var snout = part(new THREE.Mesh(new THREE.SphereGeometry(0.27, 24, 18), fur), "head");
+snout.scale.set(1.35, 0.78, 0.82);
+snout.position.set(0.48, -0.1, 0);
+headGroup.add(snout);
+
+var nose = part(new THREE.Mesh(new THREE.SphereGeometry(0.095, 16, 12), dark), "nose");
+nose.position.set(0.83, -0.06, 0);
+headGroup.add(nose);
+
+var eyeL = part(new THREE.Mesh(new THREE.SphereGeometry(0.058, 12, 10), dark), "head");
+eyeL.position.set(0.42, 0.14, 0.255);
+var eyeR = eyeL.clone(); eyeR.position.z = -0.255;
+part(eyeR, "head");
+headGroup.add(eyeL); headGroup.add(eyeR);
+
+var earGeo = new THREE.SphereGeometry(0.135, 16, 12);
+var earL = part(new THREE.Mesh(earGeo, fur), "ears");
+earL.scale.set(1, 1, 0.7);
+earL.position.set(-0.12, 0.44, 0.30);
+var earR = earL.clone(); earR.position.z = -0.30;
+part(earR, "ears");
+headGroup.add(earL); headGroup.add(earR);
+
+// -- legs ------------------------------------------------------
+var legGeo = new THREE.CylinderGeometry(0.24, 0.3, 1.15, 14);
+var pawGeo = new THREE.SphereGeometry(0.3, 18, 14);
+var HIPS = [
+  [ 0.82, 1.25,  0.46, 0],   // front-left   (phase 0)
+  [ 0.82, 1.25, -0.46, 1],   // front-right  (phase π)
+  [-0.95, 1.30,  0.50, 1],   // back-left    (phase π)
+  [-0.95, 1.30, -0.50, 0]    // back-right   (phase 0)
+];
+var legGroups = [];
+HIPS.forEach(function(h){
+  var g = new THREE.Group();
+  g.position.set(h[0], h[1], h[2]);
+  var leg = part(new THREE.Mesh(legGeo, fur), "paws");
+  leg.position.y = -0.55;
+  var paw = part(new THREE.Mesh(pawGeo, fur), "paws");
+  paw.scale.set(1.2, 0.62, 1.28);
+  paw.position.set(0.06, -1.12, 0);
+  g.add(leg); g.add(paw);
+  g.userData.phase = h[3] * Math.PI;
+  bear.add(g);
+  legGroups.push(g);
+});
+
+// -- tail ------------------------------------------------------
+var tail = part(new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), fur), "tail");
+tail.position.set(-1.85, 1.62, 0);
+bear.add(tail);
+
+/* ============================================================
+   4. Atmosphere — snowfall, stars, aurora curtains
+============================================================ */
+function circleSprite(){
+  var c = document.createElement("canvas"); c.width = c.height = 64;
+  var g = c.getContext("2d");
+  var grad = g.createRadialGradient(32,32,2, 32,32,30);
+  grad.addColorStop(0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.6, "rgba(255,255,255,.7)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad; g.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+}
+
+// snowfall
+var SNOW_N = 1400;
+var snowPos = new Float32Array(SNOW_N * 3);
+var snowVel = new Float32Array(SNOW_N);
+var snowPhase = new Float32Array(SNOW_N);
+for (var i = 0; i < SNOW_N; i++){
+  snowPos[i*3]   = (Math.random()-0.5) * 56;
+  snowPos[i*3+1] = Math.random() * 26;
+  snowPos[i*3+2] = (Math.random()-0.5) * 56;
+  snowVel[i]     = 0.8 + Math.random() * 1.4;
+  snowPhase[i]   = Math.random() * Math.PI * 2;
+}
+var snowGeo = new THREE.BufferGeometry();
+snowGeo.setAttribute("position", new THREE.BufferAttribute(snowPos, 3));
+var snowMat = new THREE.PointsMaterial({
+  map:circleSprite(), size:0.16, transparent:true, opacity:0.9,
+  depthWrite:false, sizeAttenuation:true
+});
+var snow = new THREE.Points(snowGeo, snowMat);
+scene.add(snow);
+
+// stars (night only)
+var STAR_N = 700;
+var starPos = new Float32Array(STAR_N * 3);
+for (var s = 0; s < STAR_N; s++){
+  var th = Math.random() * Math.PI * 2;
+  var ph = Math.acos(Math.random());           // upper hemisphere
+  var r  = 92;
+  starPos[s*3]   = r * Math.sin(ph) * Math.cos(th);
+  starPos[s*3+1] = r * Math.cos(ph) + 2;
+  starPos[s*3+2] = r * Math.sin(ph) * Math.sin(th);
+}
+var starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+var starMat = new THREE.PointsMaterial({
+  color:0xffffff, size:0.55, transparent:true, opacity:0,
+  depthWrite:false, sizeAttenuation:true, fog:false
+});
+scene.add(new THREE.Points(starGeo, starMat));
+
+// aurora curtains
+function auroraTexture(){
+  var c = document.createElement("canvas"); c.width = 1024; c.height = 256;
+  var g = c.getContext("2d");
+  var v = g.createLinearGradient(0, 0, 0, 256);
+  v.addColorStop(0.00, "rgba(94,240,200,0)");
+  v.addColorStop(0.25, "rgba(94,240,200,.8)");
+  v.addColorStop(0.55, "rgba(143,123,255,.45)");
+  v.addColorStop(1.00, "rgba(10,17,40,0)");
+  g.fillStyle = v; g.fillRect(0, 0, 1024, 256);
+  g.globalCompositeOperation = "destination-in";
+  var h = g.createLinearGradient(0, 0, 1024, 0);
+  for (var i = 0; i <= 48; i++){
+    h.addColorStop(i/48, "rgba(0,0,0," + (0.12 + 0.88*Math.abs(Math.sin(i*1.7))) + ")");
+  }
+  g.fillStyle = h; g.fillRect(0, 0, 1024, 256);
+  var t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping;
+  return t;
+}
+function makeCurtain(radius, height, y, repeat){
+  var tex = auroraTexture(); tex.repeat.x = repeat;
+  var mat = new THREE.MeshBasicMaterial({
+    map:tex, transparent:true, side:THREE.BackSide,
+    depthWrite:false, opacity:0, fog:false
+  });
+  var mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 64, 1, true), mat);
+  mesh.position.y = y;
+  scene.add(mesh);
+  return { mat:mat, tex:tex };
+}
+var curtainA = makeCurtain(54, 26, 16, 2);
+var curtainB = makeCurtain(47, 20, 13, 3);
+
+/* ============================================================
+   5. Field notes (the discovery log)
+============================================================ */
+var PARTS = {
+  nose:{ label:"Nose",  text:"A polar bear can smell a seal from over a kilometre away — even through a metre of snow and ice." },
+  ears:{ label:"Ears",  text:"Small, round ears lose almost no heat. Essential equipment when the air is −40°." },
+  head:{ label:"Head",  text:"The long neck and narrow skull aren't just elegant — they streamline the bear for a life spent swimming." },
+  fur: { label:"Fur",   text:"The fur isn't white. Each hair is hollow and transparent, scattering light over jet-black skin that soaks up the sun." },
+  paws:{ label:"Paws",  text:"Up to 30 cm wide: snowshoes, paddles and ice-grips in one. The soles carry tiny bumps called papillae for traction." },
+  tail:{ label:"Tail",  text:"A stubby ~10 cm tail. Anything longer would simply leak heat into the Arctic air." }
+};
+var found = {};
+var foundCount = 0;
+
+var chipsEl = document.getElementById("chips");
+var noteEl  = document.getElementById("note");
+var countEl = document.getElementById("count");
+var toastEl = document.getElementById("toast");
+var chipEls = {};
+
+Object.keys(PARTS).forEach(function(key){
+  var div = document.createElement("div");
+  div.className = "chip";
+  div.innerHTML = '<span class="dot"></span>' + PARTS[key].label;
+  chipsEl.appendChild(div);
+  chipEls[key] = div;
+});
+
+var toastTimer = null;
+function toast(html){
+  toastEl.innerHTML = html;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2600);
+}
+
+var headNod = 0;
+function discover(key){
+  var p = PARTS[key];
+  if (!p) return;
+  noteEl.innerHTML = "<b>" + p.label.toUpperCase() + "</b> — " + p.text;
+  headNod = 1;
+  if (found[key]) return;
+  found[key] = true;
+  foundCount++;
+  chipEls[key].classList.add("found");
+  countEl.textContent = foundCount + " / 6";
+  countEl.classList.add("pulse");
+  setTimeout(function(){ countEl.classList.remove("pulse"); }, 300);
+  notesPanel.classList.add("open");
+  notesHead.setAttribute("aria-expanded", "true");
+  if (foundCount === 6){
+    toast("All six notes logged — <b>the aurora salutes you</b> 🌌");
+    if (!nightOn) setNight(true);
+  } else {
+    toast("Field note logged — <b>" + p.label + "</b>");
+  }
+}
+
+// collapsible notes panel
+var notesPanel = document.getElementById("notes");
+var notesHead  = document.getElementById("notesHead");
+function toggleNotes(){
+  var open = notesPanel.classList.toggle("open");
+  notesHead.setAttribute("aria-expanded", open ? "true" : "false");
+}
+notesHead.addEventListener("click", toggleNotes);
+notesHead.addEventListener("keydown", function(e){
+  if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleNotes(); }
+});
+if (window.innerWidth < 640){
+  notesPanel.classList.remove("open");
+  notesHead.setAttribute("aria-expanded", "false");
+}
+
+/* ============================================================
+   6. Controls — orbit camera, toggles, part picking
+============================================================ */
+var WALK_R = 3;
+var bearTheta = 0;
+bear.position.set(WALK_R * Math.sin(bearTheta), 0, WALK_R * Math.cos(bearTheta));
+bear.rotation.y = bearTheta;
+
+var camTarget = new THREE.Vector3(0, 1.55, 1.65);
+var tTheta = 0.5,  tPhi = 1.12, tRadius = 9.5;
+var cTheta = RM ? tTheta : tTheta + 0.9;
+var cPhi   = RM ? tPhi   : tPhi - 0.28;
+var cRadius= RM ? tRadius: 26;
+
+var walkOn = false, nightOn = false, snowOn = !RM;
+var walkBlend = 0, nightBlend = 0, snowBlend = snowOn ? 1 : 0;
+
+var btnWalk = document.getElementById("btnWalk");
+var btnNight= document.getElementById("btnNight");
+var btnSnow = document.getElementById("btnSnow");
+btnSnow.setAttribute("aria-pressed", snowOn ? "true" : "false");
+
+function setWalk(v){ walkOn = v; btnWalk.setAttribute("aria-pressed", v ? "true" : "false"); }
+function setNight(v){ nightOn = v; btnNight.setAttribute("aria-pressed", v ? "true" : "false"); }
+function setSnow(v){ snowOn = v; btnSnow.setAttribute("aria-pressed", v ? "true" : "false"); }
+btnWalk.addEventListener("click", function(){ setWalk(!walkOn); });
+btnNight.addEventListener("click", function(){ setNight(!nightOn); });
+btnSnow.addEventListener("click", function(){ setSnow(!snowOn); });
+
+// pointer input
+var el = renderer.domElement;
+var pointers = {};
+var pointerCount = 0;
+var dragging = false;
+var lastX = 0, lastY = 0;
+var downX = 0, downY = 0, downT = 0;
+var pinchDist = 0;
+var mouseNX = 0, mouseNY = 0;   // for head tracking
+
+function pinchDistance(){
+  var ids = Object.keys(pointers);
+  var a = pointers[ids[0]], b = pointers[ids[1]];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+el.addEventListener("pointerdown", function(e){
+  el.setPointerCapture(e.pointerId);
+  pointers[e.pointerId] = { x:e.clientX, y:e.clientY };
+  pointerCount++;
+  if (pointerCount === 1){
+    dragging = true;
+    lastX = downX = e.clientX;
+    lastY = downY = e.clientY;
+    downT = performance.now();
+  } else if (pointerCount === 2){
+    pinchDist = pinchDistance();
+  }
+});
+
+el.addEventListener("pointermove", function(e){
+  mouseNX = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseNY = 1 - (e.clientY / window.innerHeight) * 2;
+  if (!pointers[e.pointerId]) return;
+  pointers[e.pointerId].x = e.clientX;
+  pointers[e.pointerId].y = e.clientY;
+  if (pointerCount === 1 && dragging){
+    tTheta -= (e.clientX - lastX) * 0.005;
+    tPhi   -= (e.clientY - lastY) * 0.005;
+    tPhi = clamp(tPhi, 0.15, 1.45);
+    lastX = e.clientX; lastY = e.clientY;
+  } else if (pointerCount === 2){
+    var d = pinchDistance();
+    if (pinchDist > 0) tRadius = clamp(tRadius * (pinchDist / d), 4.5, 26);
+    pinchDist = d;
+  }
+});
+
+function endPointer(e){
+  if (pointers[e.pointerId]){
+    delete pointers[e.pointerId];
+    pointerCount = Math.max(0, pointerCount - 1);
+  }
+  if (pointerCount === 0 && dragging){
+    dragging = false;
+    var moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+    if (moved < 7 && performance.now() - downT < 400) pick(e.clientX, e.clientY);
+  }
+  if (pointerCount < 2) pinchDist = 0;
+}
+el.addEventListener("pointerup", endPointer);
+el.addEventListener("pointercancel", endPointer);
+
+el.addEventListener("wheel", function(e){
+  e.preventDefault();
+  tRadius = clamp(tRadius * (1 + e.deltaY * 0.001), 4.5, 26);
+}, { passive:false });
+
+// picking
+var raycaster = new THREE.Raycaster();
+var ndc = new THREE.Vector2();
+function pick(x, y){
+  ndc.set((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  var hits = raycaster.intersectObjects(partMeshes, false);
+  if (hits.length) discover(hits[0].object.userData.part);
+}
+
+window.addEventListener("resize", function(){
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ============================================================
+   7. Animation loop
+============================================================ */
+var clock = new THREE.Clock();
+var legPhase = 0;
+var blinkAt = 2.5;
+var eyeScaleY = 1;
+
+function animate(){
+  requestAnimationFrame(animate);
+  var dt = Math.min(clock.getDelta(), 0.05);
+  var t = clock.elapsedTime;
+
+  // blends
+  walkBlend  = damp(walkBlend,  walkOn  ? 1 : 0, 4, dt);
+  nightBlend = damp(nightBlend, nightOn ? 1 : 0, 2.2, dt);
+  snowBlend  = damp(snowBlend,  snowOn  ? 1 : 0, 3, dt);
+
+  /* ----- day / night ----- */
+  scene.background.copy(DAY_BG).lerp(NIGHT_BG, nightBlend);
+  scene.fog.color.copy(scene.background);
+  groundMat.color.copy(DAY_GROUND).lerp(NIGHT_GROUND, nightBlend);
+  sun.color.copy(DAY_SUN).lerp(NIGHT_SUN, nightBlend);
+  sun.intensity  = 1.15 + (0.3  - 1.15) * nightBlend;
+  hemi.intensity = 0.75 + (0.22 - 0.75) * nightBlend;
+  starMat.opacity = nightBlend;
+  curtainA.mat.opacity = nightBlend * 0.8;
+  curtainB.mat.opacity = nightBlend * 0.5;
+  curtainA.tex.offset.x += dt * 0.008;
+  curtainB.tex.offset.x -= dt * 0.012;
+
+  /* ----- walking ----- */
+  bearTheta += dt * 0.55 * walkBlend;
+  legPhase  += dt * 6.0  * walkBlend;
+  bear.position.set(WALK_R * Math.sin(bearTheta), 0, WALK_R * Math.cos(bearTheta));
+  bear.rotation.y = bearTheta;
+  legGroups.forEach(function(g){
+    g.rotation.z = Math.sin(legPhase + g.userData.phase) * 0.5 * walkBlend;
+  });
+  body.position.y = 1.38 + Math.sin(legPhase * 2) * 0.05 * walkBlend;
+  bear.rotation.x = Math.sin(legPhase) * 0.025 * walkBlend;
+
+  /* ----- idle life ----- */
+  var idle = 1 - walkBlend;
+  var breathe = 1 + Math.sin(t * 2.1) * 0.012 * idle;
+  body.scale.set(1.55 * breathe, 1.06 * breathe, 1.08 * breathe);
+
+  headNod = Math.max(0, headNod - dt * 2.2);
+  var nod = Math.sin(Math.min(headNod * Math.PI, Math.PI)) * 0.18;
+  headGroup.rotation.y = damp(headGroup.rotation.y,
+      clamp(mouseNX, -1, 1) * 0.55 * idle + Math.sin(legPhase) * 0.06 * walkBlend, 5, dt);
+  headGroup.rotation.z = damp(headGroup.rotation.z,
+      clamp(mouseNY, -1, 1) * 0.28 * idle - nod, 5, dt);
+  tail.rotation.y = Math.sin(legPhase * 1.3) * 0.2 * walkBlend;
+
+  // blinking
+  if (t > blinkAt){
+    eyeScaleY = 0.08;
+    blinkAt = t + 2.2 + Math.random() * 3;
+  }
+  eyeScaleY = damp(eyeScaleY, 1, 14, dt);
+  eyeL.scale.y = eyeR.scale.y = eyeScaleY;
+
+  /* ----- snow ----- */
+  snowMat.opacity = 0.9 * snowBlend;
+  if (snowBlend > 0.02){
+    var arr = snowGeo.attributes.position.array;
+    for (var i = 0; i < SNOW_N; i++){
+      arr[i*3+1] -= snowVel[i] * dt;
+      arr[i*3]   += Math.sin(t * 0.7 + snowPhase[i]) * dt * 0.35;
+      if (arr[i*3+1] < 0){
+        arr[i*3+1] = 26;
+        arr[i*3]   = (Math.random()-0.5) * 56;
+        arr[i*3+2] = (Math.random()-0.5) * 56;
+      }
+    }
+    snowGeo.attributes.position.needsUpdate = true;
+  }
+
+  /* ----- camera ----- */
+  camTarget.x = damp(camTarget.x, bear.position.x * 0.55, 3, dt);
+  camTarget.z = damp(camTarget.z, bear.position.z * 0.55, 3, dt);
+  cTheta  = damp(cTheta,  tTheta,  6, dt);
+  cPhi    = damp(cPhi,    tPhi,    6, dt);
+  cRadius = damp(cRadius, tRadius, RM ? 12 : 2.4, dt);
+  camera.position.set(
+    camTarget.x + cRadius * Math.sin(cPhi) * Math.sin(cTheta),
+    camTarget.y + cRadius * Math.cos(cPhi),
+    camTarget.z + cRadius * Math.sin(cPhi) * Math.cos(cTheta)
+  );
+  camera.lookAt(camTarget);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+})();
+</script>
+</body>
+</html>
